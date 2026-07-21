@@ -1,33 +1,51 @@
-from PIL import Image, ImageFilter
-import matplotlib.pyplot as plt
+import cv2
+import numpy as np
 import os
 
-def apply_blur_filter(image_path, output_path="blurred_image.png"):
-    try:
-        img = Image.open(image_path)
-        img_resized = img.resize((128, 128))
-        img_blurred = img_resized.filter(ImageFilter.GaussianBlur(radius=2))
+def apply_artistic_filter(image_path):
+    # Load image
+    img = cv2.imread(image_path)
+    if img is None:
+        print(f"Error: Could not load image '{image_path}'")
+        return
 
-        plt.imshow(img_blurred)
-        plt.axis('off')
-        plt.savefig(output_path, bbox_inches='tight', pad_inches=0)
-        plt.close()
-        print(f"Processed image saved as '{output_path}'.")
+    # 1. Convert to LAB color space to boost saturation & contrast
+    lab = cv2.cvtColor(img, cv2.COLOR_BGR2LAB)
+    l, a, b = cv2.split(lab)
 
-    except Exception as e:
-        print(f"Error processing image: {e}")
+    # Apply CLAHE (Contrast Limited Adaptive Histogram Equalization) to L-channel
+    clahe = cv2.createCLAHE(clipLimit=3.0, tileGridSize=(8, 8))
+    cl = clahe.apply(l)
+
+    # Merge channels back
+    limg = cv2.merge((cl, a, b))
+    enhanced = cv2.cvtColor(limg, cv2.COLOR_LAB2BGR)
+
+    # 2. Sharpen edges for high detail
+    kernel = np.array([[0, -1, 0],
+                       [-1, 5, -1],
+                       [0, -1, 0]])
+    sharpened = cv2.filter2D(enhanced, -1, kernel)
+
+    # 3. Add a Cool Cyan/Magenta Tint (Neon/Cyberpunk vibe)
+    hsv = cv2.cvtColor(sharpened, cv2.COLOR_BGR2HSV)
+    h, s, v = cv2.split(hsv)
+    
+    # Boost Saturation
+    s = cv2.add(s, 40)
+    
+    final_hsv = cv2.merge((h, s, v))
+    filtered_img = cv2.cvtColor(final_hsv, cv2.COLOR_HSV2BGR)
+
+    # Save output image
+    output_filename = "filtered_output.jpg"
+    cv2.imwrite(output_filename, filtered_img)
+    print(f"\n[+] Success! Filtered image saved as '{output_filename}'")
 
 if __name__ == "__main__":
-    print("Image Blur Processor (type 'exit' to quit)\n")
+    print("--- Artistic Filter Tool ---")
     while True:
-        image_path = input("Enter image filename (or 'exit' to quit): ").strip()
-        if image_path.lower() == 'exit':
-            print("Goodbye!")
+        img_name = input("\nEnter image filename (or 'exit' to quit): ").strip()
+        if img_name.lower() == 'exit':
             break
-        if not os.path.isfile(image_path):
-            print(f"File not found: {image_path}")
-            continue
-        # derive output filename
-        base, ext = os.path.splitext(image_path)
-        output_file = f"{base}_blurred{ext}"
-        apply_blur_filter(image_path, output_file)
+        apply_artistic_filter(img_name)
